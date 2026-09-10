@@ -24,10 +24,15 @@ Accept a single target URL from the user (query, pasted link, or “audit this s
 Run the three sub-skills **sequentially** on the same `target_url`. Read and follow each skill’s `SKILL.md` fully before starting that phase.
 
 1. **crawl-render-audit** (`skills/crawl-render-audit/SKILL.md`)  
-   Technical crawlability, robots, JSON-LD/schema.org, static vs rendered DOM.
+   Technical crawlability, robots, JSON-LD/schema.org, static vs rendered DOM.  
+   After `render_diff.py` completes, **retain its output** for the next phase:
+   - `output.static_text` — visible text from the raw static HTML.
+   - `output.rendered_text` — full visible body text from the Playwright-rendered DOM (`null` if Playwright was unavailable or the render failed).  
+   Write `rendered_text` to a temporary UTF-8 file (e.g. `rendered_text.tmp`) so it can be passed to `staleness_check.py` in step 2. If `rendered_text` is `null`, do not create the file.
 
 2. **freshness-corroboration** (`skills/freshness-corroboration/SKILL.md`)  
-   Core entity, third-party corroboration, name collision, stale dates.
+   Core entity, third-party corroboration, name collision, stale dates.  
+   **Snapshot hand-off**: pass the `rendered_text.tmp` file path (if it exists) to `staleness_check.py` via the `--rendered-text` argument. This lets the staleness script detect copyright years and dated content in JavaScript-rendered pages (SPAs) where the static HTML shell contains no visible text. Do not re-fetch or re-render the page independently.
 
 3. **engagement-audit** (`skills/engagement-audit/SKILL.md`)  
    Hero orientation, IA for AI-style questions, trust signals.

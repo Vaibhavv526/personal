@@ -15,6 +15,11 @@ Core facts compared:
     - H1 (brand/entity name, page title)
     - <meta name="description"> content
     - JSON-LD blocks (presence and content)
+
+Additional output fields (for snapshot hand-off to freshness-corroboration):
+    - static_text: visible text extracted from raw HTML (no JS)
+    - rendered_text: full visible body text from the rendered DOM
+      (None when Playwright is unavailable or render fails)
 """
 
 import sys
@@ -68,6 +73,42 @@ class CoreFactExtractor(HTMLParser):
             self._jsonld_buf.append(data)
 
 
+class VisibleTextExtractor(HTMLParser):
+    """Extract all visible text (excluding script/style/noscript/head) from HTML.
+
+    Mirrors freshness-corroboration/scripts/staleness_check.py's FullTextExtractor
+    so that the same regex patterns apply to both static_text and rendered_text.
+    """
+
+    SKIP_TAGS = {"script", "style", "noscript", "head"}
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._skip_depth = 0
+        self._tag_stack: list[str] = []
+        self.segments: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self._tag_stack.append(tag)
+        if tag in self.SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._tag_stack and self._tag_stack[-1] == tag:
+            self._tag_stack.pop()
+        if tag in self.SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0:
+            stripped = data.strip()
+            if stripped:
+                self.segments.append(stripped)
+
+    def full_text(self) -> str:
+        return " ".join(self.segments)
+
+
 def extract_facts_from_html(html: str) -> dict[str, Any]:
     """Return core facts dict from raw HTML string."""
     parser = CoreFactExtractor()
@@ -80,6 +121,13 @@ def extract_facts_from_html(html: str) -> dict[str, Any]:
         "jsonld_block_count": len(parser.jsonld_blocks),
         "jsonld_names": jsonld_names,
     }
+
+
+def extract_visible_text_from_html(html: str) -> str:
+    """Return all visible text from raw HTML, stripped of scripts/styles."""
+    parser = VisibleTextExtractor()
+    parser.feed(html)
+    return parser.full_text()
 
 
 def _extract_jsonld_names(blocks: list[str]) -> list[str]:
@@ -138,6 +186,12 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
     """
     Launch headless Chromium via Playwright and extract core facts from the
     rendered DOM. Returns structured result or error information.
+
+    In addition to H1, meta description, and JSON-LD facts, this function also
+    captures the full visible body text of the rendered page (rendered_text).
+    That field is used by freshness-corroboration/staleness_check.py to run
+    copyright-year and dated-content checks on SPA sites where static HTML
+    contains no visible text.
     """
     try:
         from playwright.sync_api import sync_playwright, Error as PWError  # type: ignore[import]
@@ -181,6 +235,26 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
                 document.querySelectorAll('script[type="application/ld+json"]').length
             """)
 
+            # Capture full visible body text for staleness_check.py hand-off.
+            # Excludes script/style content; mirrors what VisibleTextExtractor does
+            # on static HTML so the same regex patterns apply to both.
+            rendered_text = page.evaluate("""() => {
+                const skipTags = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'HEAD']);
+                function walk(node, parts) {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        const t = node.textContent.trim();
+                        if (t) parts.push(t);
+                    } else if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (!skipTags.has(node.tagName)) {
+                            node.childNodes.forEach(c => walk(c, parts));
+                        }
+                    }
+                }
+                const parts = [];
+                walk(document.body, parts);
+                return parts.join(' ');
+            }""")
+
             browser.close()
 
             return {
@@ -189,6 +263,7 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
                 "meta_description": meta_desc,
                 "jsonld_block_count": jsonld_block_count,
                 "jsonld_names": jsonld_names,
+                "rendered_text": rendered_text,
                 "error": None,
             }
     except Exception as exc:  # noqa: BLE001
@@ -198,6 +273,7 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
             "meta_description": None,
             "jsonld_block_count": 0,
             "jsonld_names": [],
+            "rendered_text": None,
             "error": str(exc),
         }
 
@@ -282,7 +358,9 @@ def main() -> None:
         "target_url": target_url,
         "playwright_available": pw_available,
         "static_facts": None,
+        "static_text": None,      # visible text from raw HTML; for staleness_check.py hand-off
         "rendered_facts": None,
+        "rendered_text": None,    # visible body text from rendered DOM; for staleness_check.py hand-off
         "diff": [],
         "error": None,
     }
@@ -296,6 +374,7 @@ def main() -> None:
 
     static_facts = extract_facts_from_html(raw_result["body"])
     output["static_facts"] = static_facts
+    output["static_text"] = extract_visible_text_from_html(raw_result["body"])
 
     if not pw_available:
         # Graceful fallback — skill has a fallback path for this
@@ -324,6 +403,7 @@ def main() -> None:
         "jsonld_names": rendered_result["jsonld_names"],
     }
     output["rendered_facts"] = rendered_facts
+    output["rendered_text"] = rendered_result["rendered_text"]
     output["diff"] = diff_facts(static_facts, rendered_facts)
 
     print(json.dumps(output, indent=2))

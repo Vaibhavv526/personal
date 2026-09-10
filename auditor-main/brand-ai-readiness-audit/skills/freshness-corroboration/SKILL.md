@@ -35,6 +35,22 @@ Identify the brand/entity the page represents, test whether independent sources 
 
 ### 2. Search the web for third-party corroboration
 
+> **Search-tool failure rule (§2).** Before running any queries, verify the web-search tool is functional by issuing a single test query. If the search tool errors, times out, or returns zero usable results after **one retry**, do **not** proceed to classify any claim as uncorroborated, contradicted, lacking a footprint, or otherwise suspicious. Instead, emit exactly **one** finding for the entire corroboration step:
+>
+> ```json
+> {
+>   "title": "Corroboration check incomplete — search tool unavailable",
+>   "severity": "medium",
+>   "evidence": "<state the exact tool error message or empty-result condition observed on this run>",
+>   "suggested_action": {
+>     "summary": "Re-run corroboration checks once search tooling is available; no site change is implied by this finding.",
+>     "priority": "low"
+>   }
+> }
+> ```
+>
+> **Do not fill this gap using general or prior knowledge about the brand.** A corroboration claim (uncorroborated, contradicted, no footprint) must be backed by an actual search result retrieved during this run. Skip the remainder of §2 and proceed to §3.
+
 Search the open web for `entity_name` plus the domain and distinctive claims (e.g. `"Acme Robotics"`, `Acme Robotics {city}`, site name). Use Wikipedia/Wikidata, major news, company directories (LinkedIn company, Crunchbase, official registries, Google Knowledge-style panels if visible), and the brand’s official profiles.
 
 For each high-importance claim (legal name, what they do, location, leadership if stated as fact):
@@ -48,6 +64,22 @@ Do not treat the company’s own blog, press room, or paid landing pages as inde
 
 ### 3. Entity ambiguity (shared names)
 
+> **Search-tool failure rule (§3).** §3 depends on the same web-search tool as §2. If the tool was already found unavailable in §2 (the `Corroboration check incomplete` finding was emitted), skip §3 entirely — do not emit an additional finding for it. If §2 succeeded but the search tool fails during §3 queries specifically, apply the same rule: if the tool errors, times out, or returns zero usable results after **one retry**, emit exactly **one** finding:
+>
+> ```json
+> {
+>   "title": "Corroboration check incomplete — search tool unavailable",
+>   "severity": "medium",
+>   "evidence": "<state the exact tool error message or empty-result condition observed on this run>",
+>   "suggested_action": {
+>     "summary": "Re-run corroboration checks once search tooling is available; no site change is implied by this finding.",
+>     "priority": "low"
+>   }
+> }
+> ```
+>
+> **Do not fill this gap using general or prior knowledge about the brand.** A claim about entity collision or name ambiguity must be backed by an actual search result from this run. Skip the remainder of §3 and proceed to §4.
+
 1. Search `entity_name` without the domain. List other notable organizations, products, or people with the same or confusingly similar name.
 2. If another well-known entity shares the name in the same industry or the same country: severity `high`, title `Entity name is ambiguous`, evidence the other entity and a source URL. Suggested action: use a disambiguating legal name, product qualifier, geo, and strong schema.org `name` + `alternateName` + `sameAs` to the official profiles.
 3. If the name is generic (`Delta`, `Pioneer`, `United`) and the page never pairs it with a distinctive category or geo in title/H1: severity `high`, title `Generic brand name without disambiguation in title/H1`. Evidence: title/H1 text and a colliding entity.
@@ -56,9 +88,21 @@ Do not treat the company’s own blog, press room, or paid landing pages as inde
 
 ### 4. Stale data (copyright years, outdated posts)
 
-**Run:** `python scripts/staleness_check.py {target_url} {audit_date_iso}`
+**Run staleness_check.py with both static and rendered inputs when available.**
 
-The script fetches the page, extracts visible text (no JS), and returns `findings[]`. Each finding has `check` (`copyright_year` | `dated_content` | `blog_freshness`), `severity`, `title`, `evidence`, and `suggested_action`. Thresholds are the ones defined here — the script implements them deterministically:
+If `crawl-render-audit` has already run and `audit-orchestrator` has passed its rendered snapshot forward, invoke the script with the rendered visible text:
+
+```
+python scripts/staleness_check.py {target_url} {audit_date_iso} --rendered-text {path_to_rendered_text_file}
+```
+
+If no rendered snapshot is available (Playwright was unavailable or the orchestrator did not pass one forward), invoke without the rendered-text argument:
+
+```
+python scripts/staleness_check.py {target_url} {audit_date_iso}
+```
+
+The script fetches the page, extracts visible text from static HTML, and — when `--rendered-text` is provided — also runs the same regex checks against the rendered visible text. It returns `findings[]`. Each finding has `check` (`copyright_year` | `dated_content` | `blog_freshness`), `severity`, `title`, `evidence`, `found_in` (`"static"` | `"rendered"`), and `suggested_action`. Thresholds are the ones defined here — the script implements them deterministically:
 
 - Copyright year 1 year behind → severity `medium` (`copyright_year` check)
 - Copyright year 2+ years behind → severity `high`
@@ -66,11 +110,14 @@ The script fetches the page, extracts visible text (no JS), and returns `finding
 - Most recent blog/news post older than 18 months → severity `medium` (`blog_freshness` check)
 - Event / pricing / "coming soon" with a past date → severity `high`
 
-Use the script's `findings[]` directly as this sub-skill's stale-data findings. Promote them to the output array verbatim (add `source_skill` field; do not re-derive severity).
+When static HTML yields no copyright/dated-content matches but rendered text does, the script runs the same checks against the rendered text and tags results with `"found_in": "rendered"`. This prevents SPA sites from silently returning an empty findings list.
+
+Use the script's `findings[]` directly as this sub-skill's stale-data findings. Promote them to the output array verbatim (add `source_skill` field; do not re-derive severity). **When citing a staleness finding in the evidence string, include the `found_in` value** — e.g. `"Copyright year 2022 found in rendered DOM (SPA site; static HTML contained no copyright text)."` or `"Copyright year 2022 found in static HTML."`
 
 **Do not flag evergreen articles merely because they are old if they are not framed as current news.** If the script flags a date that is clearly in an evergreen article, discard that finding using agent judgment.
 
 Sitemap or listing dates vs on-page dates: if an on-page date suggests active status but a third-party source says the business closed — handle under contradiction in step 2, not here.
+
 
 ## 5. Proactive opportunities (even when checks pass)
 

@@ -16,9 +16,18 @@ left as agent-driven reasoning in the SKILL.md procedure — those require
 judgment, not a script.
 
 Usage:
-    python staleness_check.py <target_url> [audit_date_iso]
+    python staleness_check.py <target_url> [audit_date_iso] [--rendered-text <file>]
 
     audit_date_iso defaults to today (UTC).
+
+    --rendered-text <file>
+        Path to a UTF-8 text file containing the visible body text extracted
+        from the rendered DOM (as produced by crawl-render-audit/render_diff.py's
+        `rendered_text` field). When provided, the script runs all regex checks
+        against this rendered text whenever the static HTML yields no matches,
+        and tags each finding with "found_in": "rendered". Findings from static
+        HTML are tagged "found_in": "static". This prevents SPA sites from
+        silently returning an empty findings list.
 
 Output: JSON to stdout. Exit 0 always (errors captured in output).
 """
@@ -108,10 +117,13 @@ def extract_copyright_years(text: str) -> list[int]:
     return list(dict.fromkeys(int(m.group(1)) for m in _COPYRIGHT_RE.finditer(text)))
 
 
-def evaluate_copyright(years: list[int], audit_year: int) -> list[dict[str, Any]]:
+def evaluate_copyright(years: list[int], audit_year: int, found_in: str) -> list[dict[str, Any]]:
     """
     Apply SKILL.md §4 thresholds to copyright years.
     Returns a list of finding dicts (may be empty).
+
+    found_in: "static" | "rendered" — indicates which content source the
+    copyright year was found in.
     """
     if not years:
         return []
@@ -128,7 +140,11 @@ def evaluate_copyright(years: list[int], audit_year: int) -> list[dict[str, Any]
             "latest_copyright_year": latest,
             "audit_year": audit_year,
             "years_behind": behind,
-            "evidence": f"Footer copyright year {latest}; audit year {audit_year} ({behind} year(s) behind).",
+            "found_in": found_in,
+            "evidence": (
+                f"Footer copyright year {latest}; audit year {audit_year} "
+                f"({behind} year(s) behind). Found in {found_in} content."
+            ),
             "suggested_action": {
                 "summary": "Update the copyright year in the global footer.",
                 "priority": severity,
@@ -254,8 +270,8 @@ def extract_dated_content(text: str, audit_date: date) -> list[dict[str, Any]]:
     return findings
 
 
-def evaluate_dated_content(raw_matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Wrap raw matches into the findings contract."""
+def evaluate_dated_content(raw_matches: list[dict[str, Any]], found_in: str) -> list[dict[str, Any]]:
+    """Wrap raw matches into the findings contract, tagging each with found_in."""
     results = []
     seen: set[str] = set()
     for m in raw_matches:
@@ -272,9 +288,11 @@ def evaluate_dated_content(raw_matches: list[dict[str, Any]]) -> list[dict[str, 
             "matched_text": m["matched_text"],
             "parsed_date": m["parsed_date"],
             "months_old": m["months_old"],
+            "found_in": found_in,
             "evidence": (
                 f"Matched '{m['matched_text']}' ({m['parsed_date']}); "
-                f"{m['months_old']} months before audit date. {m['note']}"
+                f"{m['months_old']} months before audit date. {m['note']} "
+                f"Found in {found_in} content."
             ),
             "suggested_action": {
                 "summary": "Refresh or label as historical. Remove or update past event dates.",
@@ -321,7 +339,9 @@ def extract_blog_dates(text: str) -> list[date]:
     return dates
 
 
-def evaluate_blog_freshness(blog_dates: list[date], audit_date: date) -> list[dict[str, Any]]:
+def evaluate_blog_freshness(
+    blog_dates: list[date], audit_date: date, found_in: str
+) -> list[dict[str, Any]]:
     if not blog_dates:
         return []
     most_recent = max(blog_dates)
@@ -335,9 +355,11 @@ def evaluate_blog_freshness(blog_dates: list[date], audit_date: date) -> list[di
             "title": "Most recent blog/news post is older than 18 months",
             "most_recent_post_date": most_recent.isoformat(),
             "months_old": months_old,
+            "found_in": found_in,
             "evidence": (
                 f"Most recent blog/news date found: {most_recent.isoformat()} "
-                f"({months_old} months before audit date {audit_date.isoformat()})."
+                f"({months_old} months before audit date {audit_date.isoformat()}). "
+                f"Found in {found_in} content."
             ),
             "suggested_action": {
                 "summary": "Publish a current update or remove the 'latest news' framing.",
@@ -347,15 +369,64 @@ def evaluate_blog_freshness(blog_dates: list[date], audit_date: date) -> list[di
     ]
 
 
+# ── Core check runner ─────────────────────────────────────────────────────────
+
+def run_checks(
+    text: str, audit_date: date, audit_year: int, found_in: str
+) -> tuple[list[int], list[dict[str, Any]]]:
+    """
+    Run all staleness checks against a single text corpus and return
+    (copyright_years_found, findings_list). found_in is tagged on every finding.
+    """
+    copyright_years = extract_copyright_years(text)
+    copyright_findings = evaluate_copyright(copyright_years, audit_year, found_in)
+
+    raw_dated = extract_dated_content(text, audit_date)
+    dated_findings = evaluate_dated_content(raw_dated, found_in)
+
+    blog_dates = extract_blog_dates(text)
+    blog_findings = evaluate_blog_freshness(blog_dates, audit_date, found_in)
+
+    return copyright_years, copyright_findings + dated_findings + blog_findings
+
+
+# ── Argument parsing ──────────────────────────────────────────────────────────
+
+def _parse_args(argv: list[str]) -> tuple[str, str | None, str | None]:
+    """
+    Returns (target_url, audit_date_str_or_None, rendered_text_path_or_None).
+    Accepts:
+        staleness_check.py <url> [date] [--rendered-text <path>]
+    """
+    if len(argv) < 2:
+        return ("", None, None)
+
+    target_url = argv[1].strip()
+    audit_date_str: str | None = None
+    rendered_text_path: str | None = None
+
+    i = 2
+    while i < len(argv):
+        if argv[i] == "--rendered-text" and i + 1 < len(argv):
+            rendered_text_path = argv[i + 1]
+            i += 2
+        else:
+            if audit_date_str is None and not argv[i].startswith("--"):
+                audit_date_str = argv[i].strip()
+            i += 1
+
+    return target_url, audit_date_str, rendered_text_path
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: staleness_check.py <target_url> [audit_date_iso]"}))
+    target_url, audit_date_str, rendered_text_path = _parse_args(sys.argv)
+
+    if not target_url:
+        print(json.dumps({"error": "Usage: staleness_check.py <target_url> [audit_date_iso] [--rendered-text <file>]"}))
         sys.exit(1)
 
-    target_url = sys.argv[1].strip()
-    audit_date_str = sys.argv[2].strip() if len(sys.argv) > 2 else None
     try:
         audit_date = date.fromisoformat(audit_date_str) if audit_date_str else date.today()
     except ValueError:
@@ -364,6 +435,7 @@ def main() -> None:
     output: dict[str, Any] = {
         "target_url": target_url,
         "audit_date": audit_date.isoformat(),
+        "rendered_text_used": rendered_text_path is not None,
         "fetch": {"ok": False, "status": None, "error": None},
         "copyright_years_found": [],
         "findings": [],
@@ -389,24 +461,48 @@ def main() -> None:
     body = fetch_result["body"]
     extractor = FullTextExtractor()
     extractor.feed(body)
-    visible_text = extractor.full_text()
+    static_text = extractor.full_text()
 
     audit_year = audit_date.year
 
-    # 1. Copyright year
-    copyright_years = extract_copyright_years(visible_text)
-    output["copyright_years_found"] = copyright_years
-    copyright_findings = evaluate_copyright(copyright_years, audit_year)
+    # ── Run checks on static HTML first ──────────────────────────────────────
+    static_copyright_years, static_findings = run_checks(
+        static_text, audit_date, audit_year, found_in="static"
+    )
+    output["copyright_years_found"] = static_copyright_years
 
-    # 2. Dated content
-    raw_dated = extract_dated_content(visible_text, audit_date)
-    dated_findings = evaluate_dated_content(raw_dated)
+    all_findings = list(static_findings)
 
-    # 3. Blog/news freshness
-    blog_dates = extract_blog_dates(visible_text)
-    blog_findings = evaluate_blog_freshness(blog_dates, audit_date)
+    # ── If static yielded no results and rendered text is available, try it ──
+    if rendered_text_path is not None:
+        try:
+            with open(rendered_text_path, encoding="utf-8") as fh:
+                rendered_text = fh.read()
+        except OSError as exc:
+            output["rendered_text_error"] = f"Could not read rendered text file: {exc}"
+            rendered_text = None
 
-    output["findings"] = copyright_findings + dated_findings + blog_findings
+        if rendered_text:
+            rendered_copyright_years, rendered_findings = run_checks(
+                rendered_text, audit_date, audit_year, found_in="rendered"
+            )
+
+            # Supplement: add rendered findings for any check type that static
+            # produced no findings for. This covers SPA sites where static HTML
+            # is an empty shell with no visible text.
+            static_checks_with_findings = {f["check"] for f in static_findings}
+            for finding in rendered_findings:
+                if finding["check"] not in static_checks_with_findings:
+                    all_findings.append(finding)
+
+            # Extend the copyright years list with any found only in rendered
+            extra_years = [y for y in rendered_copyright_years if y not in static_copyright_years]
+            if extra_years:
+                output["copyright_years_found"] = list(
+                    dict.fromkeys(static_copyright_years + extra_years)
+                )
+
+    output["findings"] = all_findings
 
     print(json.dumps(output, indent=2))
 

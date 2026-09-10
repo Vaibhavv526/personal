@@ -1,0 +1,28 @@
+{
+  "name": "brand-ai-readiness-audit",
+  "version": "1.0.0",
+  "description": "Agentskills.io-compliant marketplace that audits websites for AI discoverability, crawl/render fidelity, fact freshness, entity corroboration, and on-site engagement. Read-only and recommend-only.",
+  "entrypoint": "audit-orchestrator",
+  "skills": [
+    {
+      "id": "audit-orchestrator",
+      "path": "skills/audit-orchestrator",
+      "entrypoint": true
+    },
+    {
+      "id": "crawl-render-audit",
+      "path": "skills/crawl-render-audit",
+      "entrypoint": false
+    },
+    {
+      "id": "freshness-corroboration",
+      "path": "skills/freshness-corroboration",
+      "entrypoint": false
+    },
+    {
+      "id": "engagement-audit",
+      "path": "skills/engagement-audit",
+      "entrypoint": false
+    }
+  ]
+}

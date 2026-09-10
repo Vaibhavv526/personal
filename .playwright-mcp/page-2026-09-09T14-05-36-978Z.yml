@@ -1,0 +1,240 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - main:
+      - navigation [ref=e2]:
+        - img "nav-logo"
+      - generic [ref=e4]:
+        - generic [ref=e8]:
+          - heading "Fcuking Delicious" [level=1] [ref=e10]:
+            - generic [aria-hidden] [ref=e11]: F
+            - generic [aria-hidden] [ref=e12]: c
+            - generic [aria-hidden] [ref=e13]: u
+            - generic [aria-hidden] [ref=e14]: k
+            - generic [aria-hidden] [ref=e15]: i
+            - generic [aria-hidden] [ref=e16]: "n"
+            - generic [aria-hidden] [ref=e17]: g
+            - generic [aria-hidden] [ref=e18]: D
+            - generic [aria-hidden] [ref=e19]: e
+            - generic [aria-hidden] [ref=e20]: l
+            - generic [aria-hidden] [ref=e21]: i
+            - generic [aria-hidden] [ref=e22]: c
+            - generic [aria-hidden] [ref=e23]: i
+            - generic [aria-hidden] [ref=e24]: o
+            - generic [aria-hidden] [ref=e25]: u
+            - generic [aria-hidden] [ref=e26]: s
+          - heading "Protein + Caffine" [level=1] [ref=e29]
+          - 'heading "Live Life to the fullest with SPYLT: Shatter boredom and embrace your inner child with every delicously smooth chug." [level=2] [ref=e30]'
+          - button "CHUG A SPYLT" [ref=e32]
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - heading "Stir Up Your Fearless Past and" [level=1] [ref=e37]:
+              - generic [aria-hidden] [ref=e38]: Stir
+              - generic [aria-hidden] [ref=e39]: Up
+              - generic [aria-hidden] [ref=e40]: Your
+              - generic [aria-hidden] [ref=e41]: Fearless
+              - generic [aria-hidden] [ref=e42]: Past
+              - generic [aria-hidden] [ref=e43]: and
+            - heading "Fuel Up Twin" [level=2] [ref=e46]
+            - heading "Your Future With Every Gulp Of Perfect Protein" [level=1] [ref=e47]:
+              - generic [aria-hidden] [ref=e48]: Your
+              - generic [aria-hidden] [ref=e49]: Future
+              - generic [aria-hidden] [ref=e50]: With
+              - generic [aria-hidden] [ref=e51]: Every
+              - generic [aria-hidden] [ref=e52]: Gulp
+              - generic [aria-hidden] [ref=e53]: Of
+              - generic [aria-hidden] [ref=e54]: Perfect
+              - generic [aria-hidden] [ref=e55]: Protein
+          - paragraph [ref=e58]:
+            - generic [aria-hidden] [ref=e59]:
+              - generic [aria-hidden] [ref=e60]: Rev
+              - generic [aria-hidden] [ref=e61]: up
+              - generic [aria-hidden] [ref=e62]: your
+              - generic [aria-hidden] [ref=e63]: rebel
+              - generic [aria-hidden] [ref=e64]: spirit
+              - generic [aria-hidden] [ref=e65]: and
+              - generic [aria-hidden] [ref=e66]: feeed
+              - generic [aria-hidden] [ref=e67]: the
+            - generic [aria-hidden] [ref=e68]:
+              - generic [aria-hidden] [ref=e69]: adventure
+              - generic [aria-hidden] [ref=e70]: of
+              - generic [aria-hidden] [ref=e71]: life
+              - generic [aria-hidden] [ref=e72]: with
+              - generic [aria-hidden] [ref=e73]: splyt,
+              - generic [aria-hidden] [ref=e74]: where
+              - generic [aria-hidden] [ref=e75]: you're
+              - generic [aria-hidden] [ref=e76]: one
+            - generic [aria-hidden] [ref=e77]:
+              - generic [aria-hidden] [ref=e78]: chug
+              - generic [aria-hidden] [ref=e79]: away
+              - generic [aria-hidden] [ref=e80]: from
+              - generic [aria-hidden] [ref=e81]: epic
+              - generic [aria-hidden] [ref=e82]: nostalgia
+              - generic [aria-hidden] [ref=e83]: and
+              - generic [aria-hidden] [ref=e84]: fearless
+            - generic [aria-hidden] [ref=e86]: fun.
+        - generic [ref=e88]:
+          - generic [ref=e90]:
+            - heading "We have 6" [level=1] [ref=e92]:
+              - generic [aria-hidden] [ref=e93]: W
+              - generic [aria-hidden] [ref=e94]: e
+              - generic [aria-hidden] [ref=e95]: h
+              - generic [aria-hidden] [ref=e96]: a
+              - generic [aria-hidden] [ref=e97]: v
+              - generic [aria-hidden] [ref=e98]: e
+              - generic [aria-hidden] [ref=e99]: "6"
+            - heading "Fcuking" [level=2] [ref=e102]
+            - heading "delicious flavors" [level=1] [ref=e104]:
+              - generic [aria-hidden] [ref=e105]: d
+              - generic [aria-hidden] [ref=e106]: e
+              - generic [aria-hidden] [ref=e107]: l
+              - generic [aria-hidden] [ref=e108]: i
+              - generic [aria-hidden] [ref=e109]: c
+              - generic [aria-hidden] [ref=e110]: i
+              - generic [aria-hidden] [ref=e111]: o
+              - generic [aria-hidden] [ref=e112]: u
+              - generic [aria-hidden] [ref=e113]: s
+              - generic [aria-hidden] [ref=e114]: f
+              - generic [aria-hidden] [ref=e115]: l
+              - generic [aria-hidden] [ref=e116]: a
+              - generic [aria-hidden] [ref=e117]: v
+              - generic [aria-hidden] [ref=e118]: o
+              - generic [aria-hidden] [ref=e119]: r
+              - generic [aria-hidden] [ref=e120]: s
+          - generic [ref=e122]:
+            - heading "Chocolate Milk" [level=1] [ref=e125]
+            - heading "Stawberry Milk" [level=1] [ref=e128]
+            - heading "Cookies & Cream" [level=1] [ref=e131]
+            - heading "Peanut Butter Chocolate" [level=1] [ref=e134]
+            - heading "Vanilla Milkshake" [level=1] [ref=e137]
+            - heading "Max Chocolate Milk" [level=1] [ref=e140]
+        - generic [ref=e142]:
+          - generic [ref=e144]:
+            - heading "It still does" [level=1] [ref=e146]:
+              - generic [aria-hidden] [ref=e147]: I
+              - generic [aria-hidden] [ref=e148]: t
+              - generic [aria-hidden] [ref=e149]: s
+              - generic [aria-hidden] [ref=e150]: t
+              - generic [aria-hidden] [ref=e151]: i
+              - generic [aria-hidden] [ref=e152]: l
+              - generic [aria-hidden] [ref=e153]: l
+              - generic [aria-hidden] [ref=e154]: d
+              - generic [aria-hidden] [ref=e155]: o
+              - generic [aria-hidden] [ref=e156]: e
+              - generic [aria-hidden] [ref=e157]: s
+            - heading "Body Good" [level=2] [ref=e160]
+          - paragraph [ref=e163]:
+            - generic [aria-hidden] [ref=e164]:
+              - generic [aria-hidden] [ref=e165]: Milk
+              - generic [aria-hidden] [ref=e166]: contains
+              - generic [aria-hidden] [ref=e167]: a
+            - generic [aria-hidden] [ref=e168]:
+              - generic [aria-hidden] [ref=e169]: wide
+              - generic [aria-hidden] [ref=e170]: array
+              - generic [aria-hidden] [ref=e171]: of
+            - generic [aria-hidden] [ref=e172]:
+              - generic [aria-hidden] [ref=e173]: nutrients,
+              - generic [aria-hidden] [ref=e174]: including
+            - generic [aria-hidden] [ref=e175]:
+              - generic [aria-hidden] [ref=e176]: vitamins,
+              - generic [aria-hidden] [ref=e177]: minerals,
+            - generic [aria-hidden] [ref=e178]:
+              - generic [aria-hidden] [ref=e179]: and
+              - generic [aria-hidden] [ref=e180]: protein,
+              - generic [aria-hidden] [ref=e181]: and
+            - generic [aria-hidden] [ref=e182]:
+              - generic [aria-hidden] [ref=e183]: this
+              - generic [aria-hidden] [ref=e184]: is
+              - generic [aria-hidden] [ref=e185]: lactose
+              - generic [aria-hidden] [ref=e186]: free
+          - generic [ref=e188]:
+            - generic [ref=e190]:
+              - paragraph [ref=e191]:
+                - generic [aria-hidden] [ref=e193]: Potassium
+              - paragraph [ref=e194]:
+                - generic [aria-hidden] [ref=e195]:
+                  - generic [aria-hidden] [ref=e196]: up
+                  - generic [aria-hidden] [ref=e197]: to
+              - paragraph [ref=e198]:
+                - generic [aria-hidden] [ref=e200]: 245mg
+            - generic [ref=e203]:
+              - paragraph [ref=e204]:
+                - generic [aria-hidden] [ref=e206]: Calcium
+              - paragraph [ref=e207]:
+                - generic [aria-hidden] [ref=e208]:
+                  - generic [aria-hidden] [ref=e209]: up
+                  - generic [aria-hidden] [ref=e210]: to
+              - paragraph [ref=e211]:
+                - generic [aria-hidden] [ref=e213]: 500mg
+            - generic [ref=e216]:
+              - paragraph [ref=e217]:
+                - generic [aria-hidden] [ref=e218]:
+                  - generic [aria-hidden] [ref=e219]: Vitamin
+                  - generic [aria-hidden] [ref=e220]: A
+              - paragraph [ref=e221]:
+                - generic [aria-hidden] [ref=e222]:
+                  - generic [aria-hidden] [ref=e223]: up
+                  - generic [aria-hidden] [ref=e224]: to
+              - paragraph [ref=e225]:
+                - generic [aria-hidden] [ref=e227]: 176mcg
+            - generic [ref=e230]:
+              - paragraph [ref=e231]:
+                - generic [aria-hidden] [ref=e232]:
+                  - generic [aria-hidden] [ref=e233]: Vitamin
+                  - generic [aria-hidden] [ref=e234]: D
+              - paragraph [ref=e235]:
+                - generic [aria-hidden] [ref=e236]:
+                  - generic [aria-hidden] [ref=e237]: up
+                  - generic [aria-hidden] [ref=e238]: to
+              - paragraph [ref=e239]:
+                - generic [aria-hidden] [ref=e241]: 5mcg
+            - generic [ref=e244]:
+              - paragraph [ref=e245]:
+                - generic [aria-hidden] [ref=e247]: Iron
+              - paragraph [ref=e248]:
+                - generic [aria-hidden] [ref=e249]:
+                  - generic [aria-hidden] [ref=e250]: up
+                  - generic [aria-hidden] [ref=e251]: to
+              - paragraph [ref=e252]:
+                - generic [aria-hidden] [ref=e254]: 1mg
+        - generic [ref=e255]:
+          - generic [ref=e258]:
+            - paragraph [ref=e259]: "UNLOCK the Advantages: Explore the Key Benefits of Choosing SPYLT"
+            - generic [ref=e260]:
+              - heading "Shelf stable" [level=2] [ref=e264]
+              - heading "protein + caffeine" [level=2] [ref=e268]
+              - heading "Infinitely Delicious" [level=2] [ref=e272]
+              - heading "Lactose Free" [level=2] [ref=e276]
+            - paragraph [ref=e278]: And Much More...
+          - generic [ref=e288]:
+            - heading "What's" [level=1] [ref=e289]
+            - generic [ref=e290]:
+              - heading "Every" [level=1] [ref=e291]
+              - heading "one" [level=1] [ref=e292]
+            - heading "talking" [level=1] [ref=e293]
+        - generic [ref=e310]:
+          - heading "#CHUGRESPONSIBLY" [level=1] [ref=e312]
+          - generic [ref=e314]:
+            - generic [ref=e315] [cursor=pointer]
+            - generic [ref=e316] [cursor=pointer]
+            - generic [ref=e317] [cursor=pointer]
+          - generic [ref=e318]:
+            - generic [ref=e319]:
+              - paragraph [ref=e321]: SPYLT Flavors
+              - generic [ref=e322]:
+                - paragraph [ref=e323]: Chug Club
+                - paragraph [ref=e324]: Student Marketing
+                - paragraph [ref=e325]: Dairy Dealers
+              - generic [ref=e326]:
+                - paragraph [ref=e327]: Company
+                - paragraph [ref=e328]: Contacts
+                - paragraph [ref=e329]: Tasty Talk
+            - generic [ref=e330]:
+              - paragraph [ref=e331]: Get Exclusive Early Access and Stay Informed About Product Updates, Events, and More!
+              - generic [ref=e332]:
+                - textbox "Enter your email" [ref=e333]
+                - img "arrow"
+          - generic [ref=e334]:
+            - paragraph [ref=e335]: Copyright © 2025 Spylt - All Rights Reserved
+            - generic [ref=e336]:
+              - paragraph [ref=e337]: Privacy Policy
+              - paragraph [ref=e338]: Terms of Sеrvice

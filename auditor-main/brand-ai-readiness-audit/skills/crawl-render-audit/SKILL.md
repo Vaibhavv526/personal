@@ -32,10 +32,11 @@ Execute these steps in order. Use HTTP GET. Record status codes. Do not POST, au
 
 **Run:** `python scripts/robots_check.py {target_url}`
 
-Returns `fetch.status`, `fetch.error`, `sitewide_disallow`, `sitemaps[]`,
+Returns `fetch.status`, `fetch.error`, `content_type`, `looks_like_valid_robots_txt`, `sitewide_disallow`, `sitemaps[]`,
 `parsed.raw_line_count`, and `evaluation` (per tracked agent: `result`, `matched_rule`).
 
 Key severity rules (see reference for full table):
+- `looks_like_valid_robots_txt == false` (despite `fetch.status == 200`) → `high` · `robots.txt returns non-robots.txt content (catch-all routing)` (evidence citing `content_type` and short excerpt confirming HTML)
 - `fetch.status == 404` → `medium` · `robots.txt missing`
 - `fetch.ok == false` (5xx/timeout) → `high` · `robots.txt unreachable`
 - `sitewide_disallow == true` → `critical` · `Sitewide robots disallow`

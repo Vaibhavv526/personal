@@ -72,17 +72,22 @@ Never use `low` or `info` in the compiled report. Drop purely cosmetic notes, or
 
 ## Compile the report
 
-1. Concatenate all sub-skill findings.
-2. Deduplicate: same underlying issue (same URL + same defect class) → keep one finding. Merge evidence into one string. Keep the **highest** severity. Prefer the more specific title. Treat two findings as the same issue only if both have the same `type`.
-3. Sort: defects first (`critical` → `high` → `medium`), then opportunities (`medium` only). Stable sort by original discovery order within a tier.
-4. Assign `id` as `F-001`, `F-002`, … zero-padded to three digits, in sorted order across both defects and opportunities.
-5. Compute `summary`:
-   - `total_findings` = length of `findings`
-   - `critical` / `high` / `medium` = counts of those severities among **defects**
+1. **Collect complete findings**: Collect every valid finding returned by each specialist sub-skill (`crawl-render-audit`, `freshness-corroboration`, `engagement-audit`). Do not discard findings merely because they have different types or source skills.
+2. **Deduplicate strictly overlapping findings only**: Two findings are overlapping only if they represent the exact same issue (identical normalized title and same `type`). Keep the finding with the higher severity (or first if equal). **Never merge fields from different findings** — each finding must remain an independent object. Do not append, splice, or mix evidence or `suggested_action` across findings.
+3. **Sort**: defects first (`critical` → `high` → `medium`), then opportunities (`medium` only). Stable sort preserving original discovery order within a tier.
+4. **Assign sequential IDs**: Assign `id` as `F-001`, `F-002`, `F-003`, … zero-padded to three digits, in sorted order across both defects and opportunities with no gaps or missing IDs.
+5. **Recalculate summary counts directly from the final findings array**: Never preserve an earlier or stale count.
+   - `total_findings` = `len(findings)`
+   - `critical` / `high` / `medium` = exact counts of those severities among `defects`
    - `opportunities` = count of findings where `type == "opportunity"`
-6. Strip `source_skill` from emitted objects (internal only).
-7. `suggested_action.priority` must remain a string. If missing, set `high` for critical/high findings and `medium` for medium findings.
-8. Set `type` on every emitted finding. If a sub-skill omitted `type`, default to `"defect"`.
+6. **Strict field isolation**: Each emitted finding must be an independent object containing strictly: `id`, `type`, `title`, `severity`, `evidence`, and `suggested_action` (with `summary` and `priority`). No finding may contain another finding's evidence or suggested action.
+7. **Automated serialization and validation**: Execute `python3 skills/audit-orchestrator/scripts/aggregate_report.py` to aggregate, sort, number, calculate summary counts, and validate integrity.
+8. **Integrity checks before emission**:
+   - `summary.total_findings == len(findings)`
+   - counts of critical, high, medium defects, and opportunities match summary exactly
+   - all IDs are sequential `F-001` through `F-{N:03d}` with no missing IDs
+   - every finding object conforms to the schema independently
+   - if validation fails, repair internally and re-validate; never emit an invalid report.
 
 If there are zero findings, emit `findings: []` and all summary counts `0`. Do not invent issues to fill the array.
 

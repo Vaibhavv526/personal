@@ -39,10 +39,11 @@ class CoreFactExtractor(HTMLParser):
 
     def __init__(self) -> None:
         super().__init__()
-        self.h1_texts: list[str] = []
+        self.h1_elements: list[str] = []
+        self._current_h1: list[str] = []
+        self._in_h1 = False
         self.meta_description: str | None = None
         self.jsonld_blocks: list[str] = []
-        self._in_h1 = False
         self._in_jsonld = False
         self._jsonld_buf: list[str] = []
 
@@ -50,6 +51,7 @@ class CoreFactExtractor(HTMLParser):
         attr_dict = dict(attrs)
         if tag == "h1":
             self._in_h1 = True
+            self._current_h1 = []
         elif tag == "meta":
             name = (attr_dict.get("name") or "").lower()
             if name == "description" and attr_dict.get("content"):
@@ -61,6 +63,10 @@ class CoreFactExtractor(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "h1":
             self._in_h1 = False
+            text = " ".join(self._current_h1).strip()
+            if text:
+                self.h1_elements.append(text)
+            self._current_h1 = []
         elif tag == "script" and self._in_jsonld:
             self.jsonld_blocks.append("".join(self._jsonld_buf))
             self._in_jsonld = False
@@ -68,7 +74,7 @@ class CoreFactExtractor(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if self._in_h1:
-            self.h1_texts.append(data)
+            self._current_h1.append(data.strip())
         elif self._in_jsonld:
             self._jsonld_buf.append(data)
 
@@ -113,10 +119,17 @@ def extract_facts_from_html(html: str) -> dict[str, Any]:
     """Return core facts dict from raw HTML string."""
     parser = CoreFactExtractor()
     parser.feed(html)
-    h1 = " ".join(parser.h1_texts).strip() or None
+    unique_h1s: list[str] = []
+    for h in parser.h1_elements:
+        norm_h = _norm(h)
+        if not any(_norm(u) == norm_h for u in unique_h1s):
+            unique_h1s.append(h)
+
+    primary_h1 = unique_h1s[0] if unique_h1s else None
     jsonld_names = _extract_jsonld_names(parser.jsonld_blocks)
     return {
-        "h1": h1,
+        "h1": primary_h1,
+        "h1_elements": parser.h1_elements,
         "meta_description": parser.meta_description,
         "jsonld_block_count": len(parser.jsonld_blocks),
         "jsonld_names": jsonld_names,
@@ -182,7 +195,7 @@ def _playwright_available() -> bool:
         return False
 
 
-def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
+def render_with_playwright(url: str, timeout_ms: int = 10000) -> dict[str, Any]:
     """
     Launch headless Chromium via Playwright and extract core facts from the
     rendered DOM. Returns structured result or error information.
@@ -199,11 +212,25 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+            try:
+                page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+            except PWError:
+                # If networkidle times out (e.g. background polling/streaming on an SPA),
+                # the page is usually already loaded; ensure DOM is ready and proceed.
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:
+                    pass
 
             h1 = page.evaluate("""() => {
                 const el = document.querySelector('h1');
                 return el ? el.innerText.trim() : null;
+            }""")
+
+            rendered_h1s = page.evaluate("""() => {
+                return Array.from(document.querySelectorAll('h1'))
+                    .map(el => el.innerText.trim())
+                    .filter(Boolean);
             }""")
 
             meta_desc = page.evaluate("""() => {
@@ -260,6 +287,7 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
             return {
                 "ok": True,
                 "h1": h1,
+                "rendered_h1s": rendered_h1s,
                 "meta_description": meta_desc,
                 "jsonld_block_count": jsonld_block_count,
                 "jsonld_names": jsonld_names,
@@ -270,6 +298,7 @@ def render_with_playwright(url: str, timeout_ms: int = 20000) -> dict[str, Any]:
         return {
             "ok": False,
             "h1": None,
+            "rendered_h1s": [],
             "meta_description": None,
             "jsonld_block_count": 0,
             "jsonld_names": [],
@@ -295,18 +324,40 @@ def diff_facts(static: dict[str, Any], rendered: dict[str, Any]) -> list[dict[st
     """
     diffs = []
 
-    # H1
-    h1_gap = None
-    if not static.get("h1") and rendered.get("h1"):
+    # H1 comparison (semantic and responsive-duplicate aware)
+    static_h1s = static.get("h1_elements") or ([static["h1"]] if static.get("h1") else [])
+    rendered_h1 = rendered.get("h1")
+    rendered_h1s = rendered.get("rendered_h1s") or ([rendered_h1] if rendered_h1 else [])
+
+    norm_static_h1s = [_norm(h) for h in static_h1s if h]
+    norm_rendered_h1 = _norm(rendered_h1) if rendered_h1 else ""
+    norm_rendered_h1s = [_norm(h) for h in rendered_h1s if h]
+
+    h1_gap = "match"
+    matched_static_h1 = static.get("h1")
+
+    if not norm_static_h1s and (norm_rendered_h1 or norm_rendered_h1s):
         h1_gap = "missing_in_static"
-    elif static.get("h1") and _norm(static["h1"]) != _norm(rendered.get("h1")):
+    elif norm_static_h1s and not norm_rendered_h1 and not norm_rendered_h1s:
         h1_gap = "mismatch"
-    else:
-        h1_gap = "match"
+    elif norm_static_h1s and norm_rendered_h1:
+        exact_match = any(s == norm_rendered_h1 for s in norm_static_h1s)
+        contained_match = any((s in norm_rendered_h1 or norm_rendered_h1 in s) for s in norm_static_h1s)
+
+        if exact_match or contained_match:
+            h1_gap = "match"
+            for h in static_h1s:
+                nh = _norm(h)
+                if nh == norm_rendered_h1 or nh in norm_rendered_h1 or norm_rendered_h1 in nh:
+                    matched_static_h1 = h
+                    break
+        else:
+            h1_gap = "mismatch"
+
     diffs.append({
         "field": "h1",
-        "static_value": static.get("h1"),
-        "rendered_value": rendered.get("h1"),
+        "static_value": matched_static_h1,
+        "rendered_value": rendered_h1,
         "gap_type": h1_gap,
     })
 
@@ -357,16 +408,18 @@ def main() -> None:
     output: dict[str, Any] = {
         "target_url": target_url,
         "playwright_available": pw_available,
-        "static_facts": None,
-        "static_text": None,      # visible text from raw HTML; for staleness_check.py hand-off
-        "rendered_facts": None,
-        "rendered_text": None,    # visible body text from rendered DOM; for staleness_check.py hand-off
+        "static_facts": {},
+        "static_text": "",        # visible text from raw HTML; for staleness_check.py hand-off
+        "rendered_facts": {},
+        "rendered_text": "",      # visible body text from rendered DOM; for staleness_check.py hand-off
         "diff": [],
         "error": None,
+        "http_status": None,
     }
 
     # Always fetch static HTML
     raw_result = fetch_raw_html(target_url)
+    output["http_status"] = raw_result.get("status")
     if not raw_result["ok"] or not raw_result["body"]:
         output["error"] = f"HTTP fetch failed: status={raw_result['status']} error={raw_result['error']}"
         print(json.dumps(output, indent=2))
@@ -391,13 +444,14 @@ def main() -> None:
     rendered_result = render_with_playwright(target_url)
     if not rendered_result["ok"]:
         output["error"] = f"Playwright render failed: {rendered_result['error']}"
-        output["rendered_facts"] = None
+        output["rendered_facts"] = {}
         # Still emit static facts so partial result is useful
         print(json.dumps(output, indent=2))
         return
 
     rendered_facts: dict[str, Any] = {
         "h1": rendered_result["h1"],
+        "rendered_h1s": rendered_result.get("rendered_h1s", []),
         "meta_description": rendered_result["meta_description"],
         "jsonld_block_count": rendered_result["jsonld_block_count"],
         "jsonld_names": rendered_result["jsonld_names"],

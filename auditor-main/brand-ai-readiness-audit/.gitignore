@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.tmp
+rendered_text.tmp
+myvenv/
+.venv/
+venv/
+batch_reports/
+*_stderr.txt
+*.log

@@ -56,7 +56,7 @@ Key severity rules (required/recommended fields per type in reference):
 - Any `jsonld_parse_errors[]` → `high` · `Malformed JSON-LD`
 - Homepage without entity type → `critical` · `No entity schema.org markup in raw HTML`
 - Product URL without `Product`/`Offer` → `high` · `Product page missing Product JSON-LD`
-- `name_h1_mismatch != null` → `high` · `JSON-LD name does not match visible H1`
+- `name_h1_mismatch != null` → `high` · `Identity mismatch between JSON-LD and visible branding` (only flags actual contradictions; marketing value propositions in H1 with established brand in title/domain/nav are not defects)
 - Missing required `url` field on any node → `medium`
 - Org-type node missing `logo` or `sameAs` → `medium`
 - Dead `sameAs` URL (spot-check ≤3) → `medium` per URL
@@ -78,7 +78,7 @@ Key severity rules (full table in reference):
 - `h1` · `missing_in_static` → `critical` · `Core brand identity only present after JavaScript`
 - `meta_description` · `missing_in_static` → `high` · `Value proposition missing from static HTML`
 - `jsonld_block_count` · `missing_in_static` → `high` · `JSON-LD injected only by JavaScript`
-- `h1` · `mismatch` → `high` · `H1 differs between static HTML and rendered DOM`
+- `h1` · `mismatch` → `high` · `H1 differs between static HTML and rendered DOM` (only flags when rendered heading has no equivalent in raw HTML; responsive duplicate markup matching rendered H1 is not a gap)
 - All entries `match` → no finding
 - SPA with static JSON-LD + H1 mismatch → `medium`
 

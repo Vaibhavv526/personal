@@ -36,6 +36,7 @@ ROBOTS_DIRECTIVE_RE = re.compile(
 TRACKED_AGENTS = [
     "*",
     "GPTBot",
+    "OAI-SearchBot",
     "Google-Extended",
     "anthropic-ai",
     "CCBot",
@@ -46,7 +47,7 @@ TRACKED_AGENTS = [
 ]
 
 
-def fetch_robots(robots_url: str, timeout: int = 10) -> dict[str, Any]:
+def fetch_robots(robots_url: str, timeout: int = 15) -> dict[str, Any]:
     """Fetch robots.txt and return status + body + content_type."""
     try:
         req = urllib.request.Request(

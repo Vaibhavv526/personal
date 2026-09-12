@@ -73,12 +73,14 @@ Entity types of interest: `Organization`, `LocalBusiness`, `Corporation`, `Brand
 | Any `jsonld_parse_errors[]` entry | `high` | `Malformed JSON-LD` |
 | Homepage/brand landing: no entity type found | `critical` | `No entity schema.org markup in raw HTML` |
 | Product-like URL: no `Product` or `Offer` | `high` | `Product page missing Product JSON-LD` |
-| `name_h1_mismatch != null` | `high` | `JSON-LD name does not match visible H1` |
+| `name_h1_mismatch != null` | `high` | `Identity mismatch between JSON-LD and visible branding` |
 | Node `missing_required_fields` contains `url` | `medium` | _(describe node type + missing field)_ |
 | Org-type node `missing_recommended_fields` has `logo` or `sameAs` | `medium` | _(describe missing properties)_ |
 | `sameAs` URL returns 404 (spot-check ≤3) | `medium` (per URL) | _(describe dead profile)_ |
 | `conflicting_names` non-empty | `high` | `Conflicting entity JSON-LD` |
 | `conflicting_ids` non-empty | `high` | `Conflicting entity JSON-LD @id` |
+
+**Non-findings for Step 2:** H1 serving as a marketing value proposition, tagline, or category statement when the brand identity is clearly corroborated in document title, domain, logo, or navigation.
 
 ---
 
@@ -100,6 +102,8 @@ jsonld_block_count, jsonld_names), `rendered_facts` (same shape), `diff[]`
 | `h1` | `mismatch` | `high` | `H1 differs between static HTML and rendered DOM` |
 | Any field | `match` | — | No finding |
 | SPA: `jsonld_block_count > 0` static + h1 `mismatch` | — | `medium` | `Main content client-rendered but JSON-LD present in raw HTML` |
+
+**Non-findings for Step 3:** Responsive duplicate H1 markup in static HTML that contains or matches the rendered visible H1 is not a render gap. Only flag `mismatch` when the rendered heading has no equivalent representation in the raw HTML.
 
 **Fallback (Playwright unavailable):** inspect raw HTML for `__NEXT_DATA__`,
 `window.__NUXT__`, empty `#root`/`#app` with no SSR text.

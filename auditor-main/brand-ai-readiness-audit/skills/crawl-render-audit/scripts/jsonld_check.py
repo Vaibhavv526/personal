@@ -60,35 +60,66 @@ RECOMMENDED_FIELDS_BY_TYPE: dict[str, list[str]] = {
 
 
 class ScriptTagExtractor(HTMLParser):
-    """Extract all <script type="application/ld+json"> text blocks."""
+    """Extract all <script type="application/ld+json"> text blocks, headings, title, and brand signals."""
 
     def __init__(self) -> None:
         super().__init__()
         self._in_jsonld = False
         self._current: list[str] = []
         self.blocks: list[str] = []
-        self.h1s: list[str] = []
-        self.title: str = ""
+        self.h1_elements: list[str] = []
+        self._current_h1: list[str] = []
         self._in_h1 = False
+        self.title: str = ""
         self._in_title = False
+        self.brand_signals: list[str] = []
+        self._in_header_or_nav = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attr_dict = dict(attrs)
+        attr_dict = {k.lower(): (v or "") for k, v in attrs}
+        if tag in ("header", "nav"):
+            self._in_header_or_nav += 1
+
         if tag == "script" and attr_dict.get("type", "").lower() == "application/ld+json":
             self._in_jsonld = True
             self._current = []
         elif tag == "h1":
             self._in_h1 = True
+            self._current_h1 = []
         elif tag == "title":
             self._in_title = True
+        elif tag == "meta":
+            prop = attr_dict.get("property", "").lower()
+            name = attr_dict.get("name", "").lower()
+            if prop in ("og:site_name", "og:title") or name in ("application-name", "publisher"):
+                content = attr_dict.get("content", "").strip()
+                if content:
+                    self.brand_signals.append(content)
+        elif tag in ("img", "svg", "a"):
+            alt = attr_dict.get("alt", "").strip()
+            aria = attr_dict.get("aria-label", "").strip()
+            cls = attr_dict.get("class", "").lower()
+            rel = attr_dict.get("rel", "").lower()
+            if "logo" in cls or "brand" in cls or rel == "home" or self._in_header_or_nav > 0:
+                if alt and len(alt) < 60:
+                    self.brand_signals.append(alt)
+                if aria and len(aria) < 60:
+                    self.brand_signals.append(aria)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in ("header", "nav") and self._in_header_or_nav > 0:
+            self._in_header_or_nav -= 1
+
         if tag == "script" and self._in_jsonld:
             self.blocks.append("".join(self._current))
             self._in_jsonld = False
             self._current = []
         elif tag == "h1":
             self._in_h1 = False
+            text = " ".join(self._current_h1).strip()
+            if text:
+                self.h1_elements.append(text)
+            self._current_h1 = []
         elif tag == "title":
             self._in_title = False
 
@@ -96,9 +127,13 @@ class ScriptTagExtractor(HTMLParser):
         if self._in_jsonld:
             self._current.append(data)
         elif self._in_h1:
-            self.h1s.append(data.strip())
+            self._current_h1.append(data.strip())
         elif self._in_title:
             self.title += data.strip()
+        elif self._in_header_or_nav > 0:
+            text = data.strip()
+            if text and len(text) < 40:
+                self.brand_signals.append(text)
 
 
 def fetch_html(url: str, timeout: int = 15) -> dict[str, Any]:
@@ -182,17 +217,77 @@ def validate_node(node: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def check_name_vs_h1(node_name: str | None, h1s: list[str]) -> dict[str, Any] | None:
-    """Check if JSON-LD name field matches the page H1."""
-    if not node_name or not h1s:
+def clean_brand_name(name: str) -> str:
+    """Normalize brand name by removing common legal entity suffixes and punctuation."""
+    cleaned = re.sub(
+        r"\b(llc|inc|incorporated|ltd|limited|corp|corporation|co|company|gmbh|pty|sarl|sa|bv|holdings|group)\b\.?",
+        "",
+        name,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"[^\w\s]", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip().lower()
+
+
+def check_identity_coherence(
+    node_name: str | None,
+    h1s: list[str],
+    title: str | None,
+    target_url: str,
+    brand_signals: list[str] | None = None,
+    all_entity_names: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """
+    Check if the JSON-LD entity name is consistent with the page's visible identity.
+
+    A brand's homepage H1 may legitimately be a value proposition, category statement,
+    product positioning statement, or marketing headline. An identity mismatch is only
+    reported when there is actual evidence that the page's identity is ambiguous or conflicting.
+    """
+    if not node_name:
         return None
-    h1_combined = " ".join(h1s).strip()
-    # Normalize: lowercase, collapse whitespace
-    def norm(s: str) -> str:
-        return re.sub(r"\s+", " ", s.lower().strip())
-    if norm(node_name) != norm(h1_combined):
-        return {"jsonld_name": node_name, "h1_text": h1_combined, "mismatch": True}
-    return None
+
+    norm_org = clean_brand_name(node_name)
+    if not norm_org:
+        norm_org = node_name.strip().lower()
+
+    # Extract domain name core
+    parsed = urllib.parse.urlparse(target_url)
+    host = parsed.netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    domain_core = host.split(".")[0] if "." in host else host
+
+    title_str = (title or "").lower()
+    h1_combined = " ".join(h1s).lower() if h1s else ""
+    signals = [s.lower() for s in (brand_signals or [])]
+    other_names = [clean_brand_name(n) for n in (all_entity_names or []) if n]
+
+    # 1. Direct match or containment in H1
+    if norm_org in h1_combined or any(norm_org in h.lower() for h in h1s):
+        return None
+
+    # 2. Brand identity established elsewhere (Title, Domain, Nav/Logo, other Schema)
+    brand_in_title = norm_org in title_str or (domain_core and domain_core in norm_org and domain_core in title_str)
+    brand_in_domain = norm_org in domain_core or domain_core in norm_org
+    brand_in_signals = any(norm_org in s or s in norm_org for s in signals if len(s) >= 3)
+    brand_in_other_nodes = any(norm_org == on for on in other_names if on != norm_org)
+
+    if brand_in_title or brand_in_domain or brand_in_signals or brand_in_other_nodes:
+        # Brand identity is clearly established on the page.
+        # An H1 acting as a value proposition or tagline is NOT a defect.
+        return None
+
+    # 3. Only escalate when there is an actual identity conflict or ambiguity
+    return {
+        "jsonld_name": node_name,
+        "h1_text": " ".join(h1s).strip(),
+        "title": title,
+        "domain": host,
+        "mismatch": True,
+        "conflict_type": "contradictory_identity",
+        "reason": f"JSON-LD Organization name '{node_name}' is not reflected in page title, domain, or primary heading",
+    }
 
 
 def main() -> None:
@@ -217,6 +312,7 @@ def main() -> None:
         "nodes": [],
         "entity_types_found": [],
         "h1": None,
+        "h1_elements": [],
         "title": None,
         "name_h1_mismatch": None,
         "conflicting_names": [],
@@ -231,7 +327,9 @@ def main() -> None:
     parser = ScriptTagExtractor()
     parser.feed(body)
 
-    output["h1"] = " ".join(parser.h1s).strip() or None
+    unique_h1s = list(dict.fromkeys(parser.h1_elements))
+    output["h1"] = " ".join(unique_h1s).strip() or None
+    output["h1_elements"] = parser.h1_elements
     output["title"] = parser.title or None
 
     all_nodes: list[dict[str, Any]] = []
@@ -276,10 +374,17 @@ def main() -> None:
     if len(unique_ids) > 1:
         output["conflicting_ids"] = ids
 
-    # Name vs H1 check for first entity node with a name
+    # Identity coherence check for first entity node with a name
     for v in validated:
         if v.get("name") and v["is_entity_type"] and output["h1"]:
-            mismatch = check_name_vs_h1(v["name"], parser.h1s)
+            mismatch = check_identity_coherence(
+                v["name"],
+                parser.h1_elements,
+                output["title"],
+                target_url,
+                parser.brand_signals,
+                names,
+            )
             if mismatch:
                 output["name_h1_mismatch"] = mismatch
             break  # only check the first entity

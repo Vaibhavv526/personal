@@ -164,33 +164,6 @@ def execute_audit(target_url: str, audited_at: str | None = None) -> dict:
         if not entity_name:
             entity_name = clean_entity_name(jsonld_data.get("title"), clean_site)
 
-        if jsonld_data.get("jsonld_blocks_found", 0) == 0 and len(jsonld_data.get("entity_types_found", [])) == 0:
-            c_findings.append({
-                "source_skill": "crawl-render-audit",
-                "type": "defect",
-                "title": "No entity schema.org markup in raw HTML or rendered DOM",
-                "severity": "critical",
-                "evidence": f"jsonld_check.py: jsonld_blocks_found=0, entity_types_found=[], nodes=[]. No Organization, WebSite, or schema.org type present anywhere on {clean_site}. The site has no structured entity identity.",
-                "suggested_action": {
-                    "summary": f"Add structured JSON-LD markup to the <head> of the landing page. Include an Organization or WebSite block with name='{entity_name}', url='https://{clean_site}/', and relevant category attributes to establish structured entity identity for AI crawlers.",
-                    "priority": "high"
-                }
-            })
-
-        if jsonld_data.get("name_h1_mismatch"):
-            m = jsonld_data["name_h1_mismatch"]
-            c_findings.append({
-                "source_skill": "crawl-render-audit",
-                "type": "defect",
-                "title": "JSON-LD name does not match visible H1",
-                "severity": "high",
-                "evidence": m.get("detail", f"Identity mismatch between JSON-LD and H1 on {clean_site}."),
-                "suggested_action": {
-                    "summary": f"Align the visible H1 and JSON-LD Organization name for {entity_name}.",
-                    "priority": "high"
-                }
-            })
-
         # 3. render_diff
         ret, out, err = run_command([
             "python3",
@@ -199,47 +172,84 @@ def execute_audit(target_url: str, audited_at: str | None = None) -> dict:
         ])
         render_data = json.loads(out) if ret == 0 and out.strip() else {}
 
-        # ── Check for target URL fetch failure and emit critical finding ──
-        render_error = render_data.get("error")
-        render_http_status = render_data.get("http_status")
-        if render_error:
-            # Determine severity: DNS failure / connection error = critical, redirect = high
-            if render_http_status and 300 <= render_http_status < 400:
-                fetch_severity = "high"
-                fetch_title = f"Target URL returned HTTP {render_http_status} redirect"
-            elif render_http_status and render_http_status >= 400:
-                fetch_severity = "critical"
-                fetch_title = f"Target URL returned HTTP {render_http_status}"
-            else:
-                # DNS failure, connection refused, timeout, etc.
-                fetch_severity = "critical"
-                fetch_title = "Target URL is unreachable"
-            c_findings.append({
-                "source_skill": "crawl-render-audit",
-                "type": "defect",
-                "title": fetch_title,
-                "severity": fetch_severity,
-                "evidence": f"render_diff.py: {render_error}. The target URL {target_url} cannot be fetched by crawlers or AI agents.",
-                "suggested_action": {
-                    "summary": f"Ensure {target_url} returns HTTP 200 with valid HTML content. Investigate and fix the underlying server or DNS issue.",
-                    "priority": "high" if fetch_severity == "critical" else "medium"
-                }
-            })
-
-        for diff in render_data.get("diff", []):
-            if diff.get("field") == "h1" and diff.get("gap_type") == "missing_in_static":
-                rendered_h1 = (render_data.get("rendered_facts") or {}).get("h1") or entity_name
+        if render_data.get("fetch_blocked_or_failed"):
+            render_http_status = render_data.get("http_status")
+            render_error = render_data.get("error")
+            if render_http_status in (401, 403, 429):
                 c_findings.append({
                     "source_skill": "crawl-render-audit",
                     "type": "defect",
-                    "title": "Core brand identity (H1) only present after JavaScript",
-                    "severity": "high",
-                    "evidence": f"render_diff.py: static h1={jsonld_data.get('h1')}, rendered h1='{rendered_h1}'. The H1 element is injected only by client-side JavaScript execution. Crawlers without JS execution see no H1 header.",
+                    "title": f"Target URL blocked automated access (HTTP {render_http_status})",
+                    "severity": "critical",
+                    "evidence": f"render_diff.py: {render_error}. Target URL returned HTTP {render_http_status}, which may indicate bot-protection rather than a broken site. Legitimate AI crawlers and automated agents may be similarly blocked from accessing the site.",
                     "suggested_action": {
-                        "summary": f"Add server-side rendering or pre-render the landing page so the H1 header ('{rendered_h1}') is present in the raw HTML response without JavaScript execution.",
+                        "summary": f"Verify whether automated access to {target_url} is blocked by bot protection (HTTP {render_http_status}) rather than a server error, and configure bot-management rules to permit legitimate AI search and discovery crawlers.",
                         "priority": "high"
                     }
                 })
+            else:
+                if render_http_status and 300 <= render_http_status < 400:
+                    fetch_severity = "high"
+                    fetch_title = f"Target URL returned HTTP {render_http_status} redirect"
+                elif render_http_status and render_http_status >= 400:
+                    fetch_severity = "critical"
+                    fetch_title = f"Target URL returned HTTP {render_http_status}"
+                else:
+                    fetch_severity = "critical"
+                    fetch_title = "Target URL is unreachable"
+                c_findings.append({
+                    "source_skill": "crawl-render-audit",
+                    "type": "defect",
+                    "title": fetch_title,
+                    "severity": fetch_severity,
+                    "evidence": f"render_diff.py: {render_error}. The target URL {target_url} cannot be fetched by crawlers or AI agents.",
+                    "suggested_action": {
+                        "summary": f"Ensure {target_url} returns HTTP 200 with valid HTML content. Investigate and fix the underlying server or DNS issue.",
+                        "priority": "high" if fetch_severity == "critical" else "medium"
+                    }
+                })
+        else:
+            if jsonld_data.get("jsonld_blocks_found", 0) == 0 and len(jsonld_data.get("entity_types_found", [])) == 0:
+                c_findings.append({
+                    "source_skill": "crawl-render-audit",
+                    "type": "defect",
+                    "title": "No entity schema.org markup in raw HTML or rendered DOM",
+                    "severity": "critical",
+                    "evidence": f"jsonld_check.py: jsonld_blocks_found=0, entity_types_found=[], nodes=[]. No Organization, WebSite, or schema.org type present anywhere on {clean_site}. The site has no structured entity identity.",
+                    "suggested_action": {
+                        "summary": f"Add structured JSON-LD markup to the <head> of the landing page. Include an Organization or WebSite block with name='{entity_name}', url='https://{clean_site}/', and relevant category attributes to establish structured entity identity for AI crawlers.",
+                        "priority": "high"
+                    }
+                })
+
+            if jsonld_data.get("name_h1_mismatch"):
+                m = jsonld_data["name_h1_mismatch"]
+                c_findings.append({
+                    "source_skill": "crawl-render-audit",
+                    "type": "defect",
+                    "title": "JSON-LD name does not match visible H1",
+                    "severity": "high",
+                    "evidence": m.get("detail", f"Identity mismatch between JSON-LD and H1 on {clean_site}."),
+                    "suggested_action": {
+                        "summary": f"Align the visible H1 and JSON-LD Organization name for {entity_name}.",
+                        "priority": "high"
+                    }
+                })
+
+            for diff in render_data.get("diff", []):
+                if diff.get("field") == "h1" and diff.get("gap_type") == "missing_in_static":
+                    rendered_h1 = (render_data.get("rendered_facts") or {}).get("h1") or entity_name
+                    c_findings.append({
+                        "source_skill": "crawl-render-audit",
+                        "type": "defect",
+                        "title": "Core brand identity (H1) only present after JavaScript",
+                        "severity": "high",
+                        "evidence": f"render_diff.py: static h1={jsonld_data.get('h1')}, rendered h1='{rendered_h1}'. The H1 element is injected only by client-side JavaScript execution. Crawlers without JS execution see no H1 header.",
+                        "suggested_action": {
+                            "summary": f"Add server-side rendering or pre-render the landing page so the H1 header ('{rendered_h1}') is present in the raw HTML response without JavaScript execution.",
+                            "priority": "high"
+                        }
+                    })
 
         sys.stderr.write(f"[orchestrator] Specialist 1 (crawl-render-audit): raw findings = {len(c_findings)}\n")
         specialist_findings.extend(c_findings)
@@ -329,73 +339,74 @@ def execute_audit(target_url: str, audited_at: str | None = None) -> dict:
         sys.stderr.write("[orchestrator] Specialist 3 (engagement-audit): executing...\n")
         e_findings = []
 
-        # Fetch raw HTML to parse navigation links
-        raw_html = ""
-        try:
-            req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                raw_html = resp.read().decode("utf-8", errors="ignore")
-        except Exception:
+        if not render_data.get("fetch_blocked_or_failed"):
+            # Fetch raw HTML to parse navigation links
             raw_html = ""
+            try:
+                req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    raw_html = resp.read().decode("utf-8", errors="ignore")
+            except Exception:
+                raw_html = ""
 
-        link_parser = PageLinkParser()
-        if raw_html:
-            link_parser.feed(raw_html)
+            link_parser = PageLinkParser()
+            if raw_html:
+                link_parser.feed(raw_html)
 
-        rendered_text_lower = rendered_text.lower()
-        about_found = any("about" in l["href"].lower() or "about" in l["text"].lower() for l in link_parser.links) or ("about" in rendered_text_lower[:2500] and "about " in rendered_text_lower)
+            rendered_text_lower = rendered_text.lower()
+            about_found = any("about" in l["href"].lower() or "about" in l["text"].lower() for l in link_parser.links) or ("about" in rendered_text_lower[:2500] and "about " in rendered_text_lower)
 
-        contact_found = (
-            any("contact" in l["href"].lower() or "contact" in l["text"].lower() for l in link_parser.links)
-            or ("contact" in rendered_text_lower[:2500])
-            or ("mailto:" in raw_html.lower())
-        )
+            contact_found = (
+                any("contact" in l["href"].lower() or "contact" in l["text"].lower() for l in link_parser.links)
+                or ("contact" in rendered_text_lower[:2500])
+                or ("mailto:" in raw_html.lower())
+            )
 
-        if not (about_found or contact_found):
-            snippet = rendered_text[:160].replace("\n", " ").strip() if rendered_text else "Empty page body"
-            e_findings.append({
-                "source_skill": "engagement-audit",
-                "type": "defect",
-                "title": "No obvious path to About or Contact from the landing page",
-                "severity": "high",
-                "evidence": f"Rendered text preview: '{snippet}...'. The landing page contains no navigation or footer links to About or Contact information. A first-time visitor cannot find identity or contact information within one click.",
-                "suggested_action": {
-                    "summary": f"Add a minimal nav or footer with an About link (explaining what {entity_name} is) and a Contact link or email on {clean_site}.",
-                    "priority": "high"
-                }
-            })
-
-        legal_indicators = ["inc.", "inc ", "llc", "ltd", "gmbh", "corp", "corporation", "limited", "registered in"]
-        has_legal = any(ind in rendered_text_lower for ind in legal_indicators) or any(ind in raw_html.lower() for ind in legal_indicators)
-        has_author = bool(re.search(r'<meta\s+name=[\'\"]author[\'\"]\s+content=[\'\"]([^\'\"]+)[\'\"]', raw_html, re.I))
-
-        if not (has_legal or (has_author and not clean_site.endswith(".app"))):
-            if not jsonld_data.get("entity_types_found"):
+            if not (about_found or contact_found):
+                snippet = rendered_text[:160].replace("\n", " ").strip() if rendered_text else "Empty page body"
                 e_findings.append({
                     "source_skill": "engagement-audit",
                     "type": "defect",
-                    "title": "No creator or developer identity visible on the landing page",
-                    "severity": "medium",
-                    "evidence": f"Static HTML and rendered content disclose no legal entity, verified developer profile, or organization behind '{entity_name}'. The {clean_site} domain carries no independent trust signal on the page.",
+                    "title": "No obvious path to About or Contact from the landing page",
+                    "severity": "high",
+                    "evidence": f"Rendered text preview: '{snippet}...'. The landing page contains no navigation or footer links to About or Contact information. A first-time visitor cannot find identity or contact information within one click.",
                     "suggested_action": {
-                        "summary": f"Add a footer or About section disclosing the legal entity or developer behind {entity_name}, with contact methods and official project links.",
-                        "priority": "medium"
+                        "summary": f"Add a minimal nav or footer with an About link (explaining what {entity_name} is) and a Contact link or email on {clean_site}.",
+                        "priority": "high"
                     }
                 })
 
-        meta_desc = (render_data.get("static_facts") or {}).get("meta_description") or (render_data.get("rendered_facts") or {}).get("meta_description")
-        if meta_desc and jsonld_data.get("jsonld_blocks_found", 0) == 0:
-            e_findings.append({
-                "source_skill": "engagement-audit",
-                "type": "opportunity",
-                "title": "meta_description is present in static HTML but not surfaced in structured data",
-                "severity": "medium",
-                "evidence": f"Static HTML contains a <meta name='description'> ('{meta_desc}'). However, there is no schema.org JSON-LD structured data block that surfaces this description as schema.org 'description'. The meta description is an asset not yet exposed to AI crawlers in structured form.",
-                "suggested_action": {
-                    "summary": f"Add a schema.org JSON-LD block (e.g. WebSite or WebApplication) for {entity_name} with description='{meta_desc}' to surface this description to AI systems.",
-                    "priority": "medium"
-                }
-            })
+            legal_indicators = ["inc.", "inc ", "llc", "ltd", "gmbh", "corp", "corporation", "limited", "registered in"]
+            has_legal = any(ind in rendered_text_lower for ind in legal_indicators) or any(ind in raw_html.lower() for ind in legal_indicators)
+            has_author = bool(re.search(r'<meta\s+name=[\'\"]author[\'\"]\s+content=[\'\"]([^\'\"]+)[\'\"]', raw_html, re.I))
+
+            if not (has_legal or (has_author and not clean_site.endswith(".app"))):
+                if not jsonld_data.get("entity_types_found"):
+                    e_findings.append({
+                        "source_skill": "engagement-audit",
+                        "type": "defect",
+                        "title": "No creator or developer identity visible on the landing page",
+                        "severity": "medium",
+                        "evidence": f"Static HTML and rendered content disclose no legal entity, verified developer profile, or organization behind '{entity_name}'. The {clean_site} domain carries no independent trust signal on the page.",
+                        "suggested_action": {
+                            "summary": f"Add a footer or About section disclosing the legal entity or developer behind {entity_name}, with contact methods and official project links.",
+                            "priority": "medium"
+                        }
+                    })
+
+            meta_desc = (render_data.get("static_facts") or {}).get("meta_description") or (render_data.get("rendered_facts") or {}).get("meta_description")
+            if meta_desc and jsonld_data.get("jsonld_blocks_found", 0) == 0:
+                e_findings.append({
+                    "source_skill": "engagement-audit",
+                    "type": "opportunity",
+                    "title": "meta_description is present in static HTML but not surfaced in structured data",
+                    "severity": "medium",
+                    "evidence": f"Static HTML contains a <meta name='description'> ('{meta_desc}'). However, there is no schema.org JSON-LD structured data block that surfaces this description as schema.org 'description'. The meta description is an asset not yet exposed to AI crawlers in structured form.",
+                    "suggested_action": {
+                        "summary": f"Add a schema.org JSON-LD block (e.g. WebSite or WebApplication) for {entity_name} with description='{meta_desc}' to surface this description to AI systems.",
+                        "priority": "medium"
+                    }
+                })
 
         sys.stderr.write(f"[orchestrator] Specialist 3 (engagement-audit): raw findings = {len(e_findings)}\n")
         specialist_findings.extend(e_findings)

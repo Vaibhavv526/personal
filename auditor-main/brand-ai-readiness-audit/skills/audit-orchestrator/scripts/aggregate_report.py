@@ -294,7 +294,8 @@ def aggregate_and_validate(
     if expected_ids != actual_ids:
         raise ReportIntegrityError(f"ID sequence broken: expected {expected_ids}, got {actual_ids}")
 
-    clean_site = re.sub(r"^https?://", "", site).split("/")[0].replace("www.", "")
+    clean_site = re.sub(r"^https?://", "", site).split("/")[0]
+    clean_site = re.sub(r"^www\.", "", clean_site)
 
     if debug:
         log_debug_instrumentation(raw_findings, final_findings)

@@ -408,6 +408,7 @@ def main() -> None:
     output: dict[str, Any] = {
         "target_url": target_url,
         "playwright_available": pw_available,
+        "fetch_blocked_or_failed": False,
         "static_facts": {},
         "static_text": "",        # visible text from raw HTML; for staleness_check.py hand-off
         "rendered_facts": {},
@@ -420,7 +421,11 @@ def main() -> None:
     # Always fetch static HTML
     raw_result = fetch_raw_html(target_url)
     output["http_status"] = raw_result.get("status")
-    if not raw_result["ok"] or not raw_result["body"]:
+    status = raw_result.get("status")
+    body = raw_result.get("body")
+    raw_failed = (status is None or not (200 <= status < 300)) or not (body and body.strip())
+    output["fetch_blocked_or_failed"] = raw_failed
+    if raw_failed:
         output["error"] = f"HTTP fetch failed: status={raw_result['status']} error={raw_result['error']}"
         print(json.dumps(output, indent=2))
         return

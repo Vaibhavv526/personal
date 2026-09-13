@@ -2,9 +2,7 @@
 name: freshness-corroboration
 description: Audits a URL for fact staleness, third-party corroboration of brand claims, and entity-name ambiguity. Triggers when given a URL to verify brand facts against Wikipedia, news, and directories, check name collisions, or when invoked by audit-orchestrator.
 license: MIT
-allowed-tools:
-  - http-fetch
-  - web-search
+allowed-tools: http-fetch web-search
 ---
 
 # Freshness Corroboration

@@ -2,8 +2,7 @@
 name: audit-orchestrator
 description: Entrypoint for the brand AI-readiness marketplace. Takes a public URL, sequentially runs crawl-render-audit, freshness-corroboration, and engagement-audit, then compiles a single JSON findings report. Use when the user asks to audit a website for AI discoverability, GEO/AEO, crawl/render gaps, fact freshness, entity corroboration, or on-site engagement, or when they provide a URL to this marketplace.
 license: MIT
-allowed-tools:
-  - http-fetch
+allowed-tools: http-fetch
 ---
 
 # Audit Orchestrator

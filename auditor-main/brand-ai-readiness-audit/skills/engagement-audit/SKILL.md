@@ -2,9 +2,7 @@
 name: engagement-audit
 description: Audits a URL for on-site orientation, bounce-risk, and context retention by evaluating hero clarity, information architecture for common AI-style questions, and trust signals. Triggers when given a URL to review landing UX, bounce risk, or first-visit comprehension, or when invoked by audit-orchestrator.
 license: MIT
-allowed-tools:
-  - http-fetch
-  - browser-render
+allowed-tools: http-fetch browser-render
 ---
 
 # Engagement Audit

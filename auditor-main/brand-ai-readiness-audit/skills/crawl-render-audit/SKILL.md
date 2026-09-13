@@ -2,9 +2,7 @@
 name: crawl-render-audit
 description: Audits a URL for technical crawlability, robots.txt disallows, JSON-LD/schema.org entity markup, and JavaScript rendering gaps where core facts exist only in the post-JS DOM. Triggers when given a URL to audit crawlability, structured data, SSR vs CSR, or when invoked by audit-orchestrator.
 license: MIT
-allowed-tools:
-  - http-fetch
-  - browser-render
+allowed-tools: http-fetch browser-render
 ---
 
 # Crawl Render Audit
